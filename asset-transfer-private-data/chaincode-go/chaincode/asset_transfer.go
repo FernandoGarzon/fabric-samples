@@ -592,17 +592,22 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 
+	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
+	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
+
+	if err != nil {
+		return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
+	}
+
+	if !isAdmin {
+		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create user %v. Error %v", assetInput.ProjectName, assetInput.APIUserId, err)
+	}
 	MSP, err := shim.GetMSPID()
 	if err != nil {
 		return fmt.Errorf("failed to get MSPID: %v", err)
 	}
 	PDC := "_implicit_org_" + MSP
 	assetInput.Org = MSP
-
-	clientID, err := submittingClientIdentity(ctx)
-	if err != nil {
-		return err
-	}
 
 	//Has User been created?
 
@@ -648,11 +653,6 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 	if err != nil {
 		return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
 	}
-
-	// Save asset to private data collection
-	// Typical logger, logs to stdout/file in the fabric managed docker container, running this chaincode
-	// Look for container name like dev-peer0.org1.example.com-{chaincodename_version}-xyz
-	log.Printf("WriteSchemaToPDC Put: collection %v, ID %v, owner %v", PDC, assetInput.UUID, clientID)
 
 	err = ctx.GetStub().PutPrivateData(PDC, assetInput.UUID, assetJSONasBytes)
 	if err != nil {

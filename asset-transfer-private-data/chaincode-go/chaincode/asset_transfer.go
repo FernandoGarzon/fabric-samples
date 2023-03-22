@@ -654,18 +654,22 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 		return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
 	}
 
+	GroupAsBytes, err := ctx.GetStub().GetPrivateData(PDC, GID)
+
+	if GroupAsBytes == nil {
+		return fmt.Errorf("Error Getting the Group %v from the Implicit PDC: Error %v. User can't be created if no Group is specified. Err: %v", err)
+	}
+
+	if err != nil {
+		return fmt.Errorf("Error Getting the Group %v from the Implicit PDC: Error %v. User can't be created if no Group is specified. Err: %v", err)
+	}
+
 	err = ctx.GetStub().PutPrivateData(PDC, assetInput.UUID, assetJSONasBytes)
 	if err != nil {
 		return fmt.Errorf("failed to put asset into private data collection: %v", err)
 	}
 
 	//Update of Users Group
-
-	GroupAsBytes, err := ctx.GetStub().GetPrivateData(PDC, GID)
-
-	if err != nil {
-		return fmt.Errorf("Error Getting the Group %v from the Implicit PDC: Error %v. User can't be created if no Group is specified.", GroupAsBytes, err)
-	}
 
 	var group Group
 
@@ -713,10 +717,22 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 
+	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
+	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
+
+	if err != nil {
+		return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
+	}
+
+	if !isAdmin {
+		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
+	}
+
 	MSP, err := shim.GetMSPID()
 	if err != nil {
 		return fmt.Errorf("failed to get MSPID: %v", err)
 	}
+
 	PDC := "_implicit_org_" + MSP
 	assetInput.Org = MSP
 	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
@@ -752,15 +768,9 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("Error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified.", ProjectAsBytes, err)
 	}
 
-	/**Project := new(Project)
-
-		err = json.Unmarshal(ProjectAsBytes, &Project)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal JSON into Project Struct: %v", err)
-		}
-
-		//We create the Group and the relationship with its parent Project. User list is empty.
-	**/
+	if ProjectAsBytes == nil {
+		return fmt.Errorf("Error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Group is specified. Err: %v", err)
+	}
 
 	NewGroup := Group{
 		GID:       assetInput.GID,
@@ -772,6 +782,25 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	assetJSONasBytes, err := json.Marshal(NewGroup)
 	if err != nil {
 		return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
+	}
+
+	var project Project
+
+	err = json.Unmarshal(ProjectAsBytes, &project)
+	if err != nil {
+		fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	project.Groups = append(project.Groups, NewGroup)
+
+	assetJSONasBytes, err = json.Marshal(project)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Project into JSON: %v", err)
+	}
+
+	err = ctx.GetStub().PutPrivateData(PDC, PID, assetJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to Update Project into private data collection: %v", err)
 	}
 
 	// Save asset to private data collection

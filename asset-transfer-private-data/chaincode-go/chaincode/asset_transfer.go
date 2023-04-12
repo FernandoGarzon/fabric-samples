@@ -592,6 +592,13 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 
+	MSP, err := shim.GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+	PDC := "_implicit_org_" + MSP
+	assetInput.Org = MSP
+
 	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
@@ -602,12 +609,6 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 	if !isAdmin {
 		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create user %v. Error %v", assetInput.ProjectName, assetInput.APIUserId, err)
 	}
-	MSP, err := shim.GetMSPID()
-	if err != nil {
-		return fmt.Errorf("failed to get MSPID: %v", err)
-	}
-	PDC := "_implicit_org_" + MSP
-	assetInput.Org = MSP
 
 	//Has User been created?
 
@@ -717,6 +718,15 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 
+	MSP, err := shim.GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	PDC := "_implicit_org_" + MSP
+	assetInput.Org = MSP
+	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
+
 	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
@@ -728,14 +738,6 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
 	}
 
-	MSP, err := shim.GetMSPID()
-	if err != nil {
-		return fmt.Errorf("failed to get MSPID: %v", err)
-	}
-
-	PDC := "_implicit_org_" + MSP
-	assetInput.Org = MSP
-	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
 	assetAsBytes, err := ctx.GetStub().GetPrivateData(PDC, assetInput.GID)
 
 	if err != nil {

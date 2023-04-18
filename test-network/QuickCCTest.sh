@@ -270,7 +270,6 @@ echo "========= TESTING OF GiveProject - GiveGroup - GiveUser IMPLEMENTATION in 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveProject","Args":["Org1MSP.OSC-IS_PROJECT"]}'
 
 
-
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveGroup","Args":["Org1MSP.OSC-IS_PROJECT.Admin"]}'
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveGroup","Args":["Org1MSP.OSC-IS_PROJECT.Users"]}'
@@ -279,7 +278,7 @@ peer chaincode query -C mychannel -n private -c  '{"function":"GetAllPDCUsers","
 
 echo "========= CC Invoke: Adding User to Group ==========="
 
-export ADD_USER_TO_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.Users\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
+export ADD_USER_TO_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.Admins\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
 
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"AddUserToGroup","Args":[]}' --transient "{\"asset_properties\":\"$ADD_USER_TO_GROUP\"}"
@@ -291,7 +290,7 @@ peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.exa
 
 echo "========= CC Invoke: Removing User from Group ==========="
 
-export REMOVE_USER_FROM_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.User\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
+export REMOVE_USER_FROM_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.Admin\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
 
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"RemoveUserFromGroup","Args":[]}' --transient "{\"asset_properties\":\"$REMOVE_USER_FROM_GROUP\"}"
@@ -304,6 +303,7 @@ export ASSET_PROPERTIES=$(echo -n "{\"SchemaId\":\"Project1.Schema1\",\"Project\
 
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"WriteSchemaToPDC","Args":[]}' --transient "{\"asset_properties\":\"$ASSET_PROPERTIES\"}"
+
 
 export ASSET_PROPERTIES=$(echo -n "{\"SchemaId\":\"Project1.Schema2\",\"Project\":\"Project1\",\"JsonSchemaContent\":{\"type\": \"object\", \"properties\": { \"number\": { \"type\": \"number\" }, \"street_name\": { \"type\": \"string\" }, \"street_type\": { \"enum\": [\"Street\", \"Avenue\",\"Boulevard\"] }}, \"additionalProperties\": true, \"required\": [ \"number\", \"street_name\"]}}" | base64 | tr -d \\n)
 
@@ -340,7 +340,7 @@ peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.exa
 peer chaincode query -C mychannel -n private -c '{"Args":["GetAllAssets"]}'
 
 
-"Comment: Proof of live in  Mars"
+"Comment: Proof of life in  Mars"
 
 peer chaincode query -C mychannel -n private -c  '{"function":"ReadAsset","Args":["5c278e2809530799b010946e4686fbcf661b18cd2b0d12fd66ec17e5bea80f0c"]}'
 

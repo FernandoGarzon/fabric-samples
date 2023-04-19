@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/hyperledger/fabric-chaincode-go/shim"
 	"github.com/hyperledger/fabric-contract-api-go/contractapi"
@@ -49,20 +50,23 @@ type User struct {
 
 // Type Group describes the attributes of a Group in the network. Users belong to Groups and a Group belongs to a single Project.
 type Group struct {
-	GID       string `json:"GID"`       // GID := OrgName + ProjectName + GroupName. It is unique for each group.
-	GroupName string `json:"GroupName"` // Could be either 'Admin' or 'Users'. Members of the 'Admin' group generally have more privileges.
-	Project   string `json:"Project"`   // Project Name
-	Org       string `json:"Org"`       // Org name
-	Users     []User `json:"Users"`     // Array of Users belonging to Group
+	GID       string  `json:"GID"`       // GID := OrgName + ProjectName + GroupName. It is unique for each group.
+	GroupName string  `json:"GroupName"` // Could be either 'Admin' or 'Users'. Members of the 'Admin' group generally have more privileges.
+	Project   string  `json:"Project"`   // Project Name
+	Org       string  `json:"Org"`       // Org name
+	Users     []User  `json:"Users"`     // Array of Users belonging to Group
+	Groups    []Group `json:"Groups"`    // Used when creating a Project. A project will hold information about groups.
 }
 
 // Type Project describes the attributes of a Project in th Network. - should be gone
-type Project struct {
+
+/**type Project struct {
 	PID         string  `json:"PID"`         // PID := OrgName + ProjectName. It is unique for each Project.
 	ProjectName string  `json:"ProjectName"` // Project Name
 	Org         string  `json:"Org"`         // Org name to which the Project belongs
 	Groups      []Group `json:"Groups"`      // Array of Groups belonging to Project
 }
+**/
 
 // Main function
 func main() {
@@ -76,7 +80,182 @@ func main() {
 	}
 }
 
+// ProjectName should be the only argument passed in transient dictionary.
+
+func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) error {
+
+	transientAssetJSON, err := s.getTransientMap(ctx)
+	if err != nil {
+		return fmt.Errorf("error getting transient: %v", err)
+	}
+
+	type transientInput struct {
+		GID         string `json:"GID"`
+		GroupName   string `json:"GroupName"`
+		ProjectName string `json:"ProjectName"`
+		Org         string `json:"Org"`
+	}
+
+	var assetInput transientInput
+	err = json.Unmarshal(transientAssetJSON, &assetInput)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal JSON: %v", err)
+	}
+
+	MSP, err := shim.GetMSPID()
+	if err != nil {
+		return fmt.Errorf("failed to get MSPID: %v", err)
+	}
+
+	Org := MSP
+	PDC := "_implicit_org_" + MSP
+	PID := Org + "." + assetInput.ProjectName
+	GIDAdmin := Org + "." + assetInput.ProjectName + ".Admin"
+	GIDUsers := Org + "." + assetInput.ProjectName + ".Users"
+
+	assetAsBytes, err := ctx.GetStub().GetPrivateData(PDC, PID)
+
+	if err != nil {
+		return fmt.Errorf("failed to get Project: %v", err)
+	} else if assetAsBytes != nil {
+		fmt.Println("Project already exists: " + PID)
+		return fmt.Errorf("this Project already exists: " + PID + ". Initialization stopped.")
+	}
+
+	assetAsBytes, err = ctx.GetStub().GetPrivateData(PDC, GIDAdmin)
+
+	if err != nil {
+		return fmt.Errorf("failed to get Grpup: %v", err)
+	} else if assetAsBytes != nil {
+		fmt.Println("Group already exists: " + PID)
+		return fmt.Errorf("this Group already exists: " + GIDAdmin + ". Initialization stopped.")
+	}
+
+	assetAsBytes, err = ctx.GetStub().GetPrivateData(PDC, GIDUsers)
+
+	if err != nil {
+		return fmt.Errorf("failed to get Grpup: %v", err)
+	} else if assetAsBytes != nil {
+		fmt.Println("Group already exists: " + GIDUsers)
+		return fmt.Errorf("this Group already exists: " + GIDUsers + ". Initialization stopped.")
+	}
+
+	clientID, err := submittingClientIdentity(ctx)
+	if err != nil {
+		return err
+	}
+
+	APIUserId := clientID
+
+	//Has User been created?
+
+	userID := MSP + "." + APIUserId
+
+	h := sha1.New()
+	h.Write([]byte(userID))
+	hash := hex.EncodeToString(h.Sum(nil))
+
+	UUID := hash
+
+	assetAsBytes, err = ctx.GetStub().GetPrivateData(PDC, UUID)
+
+	if err != nil {
+		return fmt.Errorf("failed to get User: %v", err)
+	} else if assetAsBytes != nil {
+		fmt.Println("User already exists: " + UUID)
+		return fmt.Errorf("this User already exists: " + UUID)
+	}
+
+	//Initial User
+	PI := User{
+		UUID:      UUID,
+		APIUserId: APIUserId,
+		Groups:    []string{"Admin", "Users"},
+		Projects:  []string{assetInput.ProjectName},
+		Org:       MSP,
+	}
+
+	// Initial Admin Group
+	Admin := Group{
+		GID:       GIDAdmin,
+		GroupName: "Admin",
+		Project:   assetInput.ProjectName,
+		Org:       MSP,
+		Users:     []User{PI},
+	}
+
+	// Initial Users Group
+	Users := Group{
+		GID:       GIDUsers,
+		GroupName: "Users",
+		Project:   assetInput.ProjectName,
+		Org:       MSP,
+		Users:     []User{PI},
+	}
+
+	//Initial Project
+	Project_ := Group{
+		GID:       PID,
+		GroupName: assetInput.ProjectName,
+		Project:   assetInput.ProjectName,
+		Org:       MSP,
+		Groups:    []Group{Admin, Users},
+	}
+
+	assetJSONasBytes, err := json.Marshal(Project_)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Project into JSON: %v", err)
+	}
+
+	log.Printf("WriteProjectToPDC Put: collection %v, ID %v, owner %v", PDC, PID, clientID)
+
+	err = ctx.GetStub().PutPrivateData(PDC, PID, assetJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put Project into private data collection: %v", err)
+	}
+
+	assetJSONasBytes, err = json.Marshal(Admin)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Group Admin into JSON: %v", err)
+	}
+
+	log.Printf("Write Admin Group Put: collection %v, ID %v, owner %v", PDC, GIDAdmin, clientID)
+
+	err = ctx.GetStub().PutPrivateData(PDC, GIDAdmin, assetJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put Admin Group into private data collection: %v", err)
+	}
+
+	assetJSONasBytes, err = json.Marshal(Users)
+	if err != nil {
+		return fmt.Errorf("failed to marshal Group Users into JSON: %v", err)
+	}
+
+	log.Printf("Write Users Group Put: collection %v, ID %v, owner %v", PDC, GIDUsers, clientID)
+
+	err = ctx.GetStub().PutPrivateData(PDC, GIDUsers, assetJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put Users Group into private data collection: %v", err)
+	}
+
+	assetJSONasBytes, err = json.Marshal(PI)
+	if err != nil {
+		return fmt.Errorf("failed to marshal User PI into JSON: %v", err)
+	}
+
+	log.Printf("Write User PI Put: collection %v, ID %v, owner %v", PDC, UUID, clientID)
+
+	err = ctx.GetStub().PutPrivateData(PDC, UUID, assetJSONasBytes)
+	if err != nil {
+		return fmt.Errorf("failed to put PI User into private data collection: %v", err)
+	}
+
+	return nil
+
+}
+
 // Hash() function calculates the sha256.Sum256 of a string. doc argument is the content of the Json file that users use to submit data into the ledger. This content is treated as a simple string.
+
 func (s *SmartContract) Hash(ctx contractapi.TransactionContextInterface, doc string) (string, error) {
 
 	var v interface{}
@@ -333,7 +512,7 @@ func (s *SmartContract) GetUser(ctx contractapi.TransactionContextInterface, API
 
 // Pass APIUserID as argument in transient map
 
-// Subscribe a new user to the Implicit PDC. APIUserId ProjectName and GroupName need to be passed as parameters in transient map
+// Subscribe a new user to the Implicit PDC. APIUserId, ProjectName and GroupName need to be passed as parameters in transient map
 
 func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) error {
 
@@ -363,7 +542,7 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 	PDC := "_implicit_org_" + MSP
 	assetInput.Org = MSP
 
-	/**AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
+	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
 	if err != nil {
@@ -373,7 +552,6 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 	if !isAdmin {
 		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create user %v. Error %v", assetInput.ProjectName, assetInput.APIUserId, err)
 	}
-	**/
 
 	//Has User been created?
 
@@ -460,7 +638,7 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 
 }
 
-// GroupName and ProjectName Arguments needed in transient map. GID = Org.ProjectName.GroupName. Org = MSP. GroupName is either Admin or Users. Project Object is obtain with ProjectName, and then added to the Group Struct.
+// GroupName and ProjectName Arguments needed in transient map. GID = Org.ProjectName.GroupName. Org = MSP. GroupName is either Admin or Users. Project Object is obtained with ProjectName, and then added to the Group Struct.
 
 func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) error {
 
@@ -492,7 +670,6 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	assetInput.Org = MSP
 	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
 
-	/**
 	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
@@ -503,7 +680,6 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	if !isAdmin {
 		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
 	}
-	**/
 
 	assetAsBytes, err := ctx.GetStub().GetPrivateData(PDC, assetInput.GID)
 
@@ -534,11 +710,11 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	ProjectAsBytes, err := ctx.GetStub().GetPrivateData(PDC, PID)
 
 	if err != nil {
-		return fmt.Errorf("Error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified.", ProjectAsBytes, err)
+		return fmt.Errorf("error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified ", ProjectAsBytes, err)
 	}
 
 	if ProjectAsBytes == nil {
-		return fmt.Errorf("Error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified. Err: %v", err)
+		return fmt.Errorf("error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified: ", ProjectAsBytes, err)
 	}
 
 	NewGroup := Group{
@@ -554,11 +730,11 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
 	}
 
-	var project Project
+	var project Group
 
 	err = json.Unmarshal(ProjectAsBytes, &project)
 	if err != nil {
-		fmt.Errorf("failed to unmarshal JSON: %v", err)
+		return fmt.Errorf("failed to unmarshal JSON: %v", err)
 	}
 
 	project.Groups = append(project.Groups, NewGroup)
@@ -903,7 +1079,7 @@ func (s *SmartContract) GetAllPDCUsers(ctx contractapi.TransactionContextInterfa
 
 }
 
-/**func (s *SmartContract) VerifyUserIsAdmin(ctx contractapi.TransactionContextInterface, GID string) (bool, error) {
+func (s *SmartContract) VerifyUserIsAdmin(ctx contractapi.TransactionContextInterface, GID string) (bool, error) {
 	MSP, err := shim.GetMSPID()
 	if err != nil {
 		return false, fmt.Errorf("failed to get MSPID: %v", err)
@@ -945,7 +1121,6 @@ func (s *SmartContract) GetAllPDCUsers(ctx contractapi.TransactionContextInterfa
 	}
 	return false, nil
 }
-**/
 
 // Pass GID and APIUserID as argument in transient dictionary
 func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterface) error {
@@ -977,7 +1152,7 @@ func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterfa
 		return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
 	}
 
-	/**GroupSplit := strings.Split(GID, ".")
+	GroupSplit := strings.Split(GID, ".")
 	GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
 
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
@@ -989,7 +1164,6 @@ func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterfa
 	if !isAdmin {
 		return fmt.Errorf("Submitting Identity is not admin. Can't add user to Group: Error %v", err)
 	}
-	**/
 
 	User_, err := s.GetUser(ctx, assetInput.APIUserID)
 
@@ -1094,7 +1268,6 @@ func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextIn
 		return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
 	}
 
-	/**
 	GroupSplit := strings.Split(GID, ".")
 	GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
 	isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
@@ -1106,7 +1279,6 @@ func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextIn
 	if !isAdmin {
 		return fmt.Errorf("Submitting Identity is not admin. Can't remove user from Group: Error %v", err)
 	}
-	**/
 
 	User, err := s.GetUser(ctx, assetInput.APIUserID)
 

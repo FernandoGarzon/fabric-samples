@@ -182,6 +182,7 @@ func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) 
 		Project:   assetInput.ProjectName,
 		Org:       MSP,
 		Users:     []User{PI},
+		Groups:    []Group{},
 	}
 
 	// Initial Users Group
@@ -191,6 +192,7 @@ func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) 
 		Project:   assetInput.ProjectName,
 		Org:       MSP,
 		Users:     []User{PI},
+		Groups:    []Group{},
 	}
 
 	//Initial Project
@@ -199,6 +201,7 @@ func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) 
 		GroupName: assetInput.ProjectName,
 		Project:   assetInput.ProjectName,
 		Org:       MSP,
+		Users:     []User{PI},
 		Groups:    []Group{Admin, Users},
 	}
 

@@ -73,7 +73,7 @@ func main() {
 
 // ProjectName should be the only argument passed in transient dictionary.
 
-func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) error {
+/*func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) error {
 
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
@@ -246,7 +246,7 @@ func (s *SmartContract) NewProject(ctx contractapi.TransactionContextInterface) 
 
 	return nil
 
-}
+}*/
 
 // Hash() function calculates the sha256.Sum256 of a string. doc argument is the content of the Json file that users use to submit data into the ledger. This content is treated as a simple string.
 
@@ -442,6 +442,70 @@ func (s *SmartContract) CreateDataSample(ctx contractapi.TransactionContextInter
 				return err
 			}
 			return ctx.GetStub().PutState(ContentHash, assetJSON)
+		}
+	}
+
+}
+
+func (s *SmartContract) UpdateDataSample(ctx contractapi.TransactionContextInterface, Hash string, Comment string, Date string, APIUserID string, JsonFileContent string, SchemaID string) error {
+
+	data, err := s.ReadAsset(ctx, Hash)
+	if err != nil {
+		return fmt.Errorf("the asset with Hash %s doesn't exist in world state. Please, verify the hash value", Hash)
+	}
+
+	SchemaExists, err := s.SchemaExists(ctx, SchemaID)
+
+	if err != nil {
+		return err
+	}
+	if !SchemaExists {
+		return fmt.Errorf("the Schema with Id %s doesn't exists", SchemaID)
+	}
+
+	user, err := s.GetUser(ctx, APIUserID)
+	if err != nil {
+		return err
+	}
+
+	if user == nil {
+		return fmt.Errorf("the submitting User is empty or doesn't exist")
+	}
+
+	if user.UUID != data.UUID {
+		groups := user.Groups
+		if !s.contains(ctx, groups, "Admin") {
+			return fmt.Errorf("the Updating User identity doesn't match submitting user's identity or User isn't admin")
+		}
+	}
+
+	valid, err := s.ValidJson(ctx, JsonFileContent, SchemaID)
+	if err != nil {
+		return err
+	}
+	if !valid {
+		return fmt.Errorf("the json file provided is not valid")
+	} else {
+		jsonFileContent, err := s.JsonReader(ctx, JsonFileContent)
+		if err != nil {
+			return err
+		} else {
+			updatedData := Data{
+				OrgName:     data.OrgName,
+				ProjectName: data.ProjectName,
+				ContentHash: data.ContentHash,
+				Comment:     Comment,
+				Date:        Date,
+				APIUserID:   APIUserID,
+				UUID:        user.UUID,
+				JsonContent: jsonFileContent,
+			}
+
+			assetJSON, err := json.Marshal(updatedData)
+			if err != nil {
+				return err
+			}
+			return ctx.GetStub().PutState(Hash, assetJSON)
 		}
 	}
 
@@ -1373,4 +1437,21 @@ func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextIn
 	}
 
 	return nil
+}
+
+func GetCertificate(ctx contractapi.TransactionContextInterface) (string, error) {
+	cert, err := ctx.GetClientIdentity().GetX509Certificate()
+	var UID string
+	OU := "OU"
+	if err != nil {
+		return "", fmt.Errorf("Failed to read client X509Certificate: %v", err)
+	}
+	for _, n := range cert.Subject.Names {
+		if n.Type.Equal(OU) {
+			if v, ok := n.Value.(string); ok {
+				UID = v
+			}
+		}
+	}
+
 }

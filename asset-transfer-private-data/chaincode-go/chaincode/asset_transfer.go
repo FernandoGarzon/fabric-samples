@@ -51,9 +51,9 @@ type User struct {
 
 // Type Group describes the attributes of a Group in the network. Users belong to Groups and a Group belongs to a single Project.
 type Group struct {
-	GID       string  `json:"GID"`       // GID := OrgName + ProjectName + GroupName. It is unique for each group.
+	GID       string  `json:"GID"`       // GID := OrgName + ProjectName + GroupName. It is unique for each group. If Group = Project, PID = GID = OrgName + ProjectName + ProjectName
 	GroupName string  `json:"GroupName"` // Could be either 'Admin' or 'Users'. Members of the 'Admin' group generally have more privileges.
-	Project   string  `json:"Project"`   // Project Name
+	Project   string  `json:"Project"`   // PID of the project the group belongs to. PID = OrgName + ProjectName
 	Org       string  `json:"Org"`       // Org name
 	Users     []User  `json:"Users"`     // Array of Users belonging to Group
 	Groups    []Group `json:"Groups"`    // Used when creating a Project. A project will hold information about groups.
@@ -474,7 +474,8 @@ func (s *SmartContract) UpdateDataSample(ctx contractapi.TransactionContextInter
 
 	if user.UUID != data.UUID {
 		groups := user.Groups
-		if !s.contains(ctx, groups, "Admin") {
+		GIDAdmin := user.Projects[0] + "." + "Admin"
+		if !s.contains(ctx, groups, GIDAdmin) {
 			return fmt.Errorf("the Updating User identity doesn't match submitting user's identity or User isn't admin")
 		}
 	}
@@ -496,7 +497,7 @@ func (s *SmartContract) UpdateDataSample(ctx contractapi.TransactionContextInter
 				ContentHash: data.ContentHash,
 				Comment:     Comment,
 				Date:        Date,
-				APIUserID:   APIUserID,
+				APIUserID:   data.APIUserID,
 				UUID:        user.UUID,
 				JsonContent: jsonFileContent,
 			}
@@ -725,6 +726,20 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("User doesn't have enough Privileges to create a new User")
 	}
 
+	// Get ID of submitting client identity
+	clientID, err := submittingClientIdentity(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Verify that the client is submitting request to peer in their organization
+	// This is to ensure that a client from another org doesn't attempt to read or
+	// write private data from this peer.
+	err = verifyClientOrgMatchesPeerOrg(ctx)
+	if err != nil {
+		return fmt.Errorf("CreateGroup cannot be performed: Error %v", err)
+	}
+
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting transient: %v", err)
@@ -753,71 +768,68 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	assetInput.Org = MSP
 	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
 
-	//AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
-	//isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
-
-	//if err != nil {
-	//	return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
-	//}
-
-	//if !isAdmin {
-	//	return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create //Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
-	//}
-
 	assetAsBytes, err := ctx.GetStub().GetPrivateData(PDC, assetInput.GID)
 
 	if err != nil {
 		return fmt.Errorf("failed to get Group: %v", err)
-	} else if assetAsBytes != nil {
-		fmt.Println("Group already exists: " + assetInput.GID)
-		return fmt.Errorf("this Group already exists: " + assetInput.GID)
+	}
+	if assetAsBytes != nil {
+		fmt.Println("Group Struct already exists: " + assetInput.GID)
+	}
+	if assetInput.ProjectName == assetInput.GroupName {
+		//create a Project
+		PID := MSP + "." + assetInput.ProjectName
+		NewGroup := Group{
+			GID:       assetInput.GID,
+			GroupName: assetInput.GroupName,
+			Project:   PID,
+			Users:     []User{},
+			Org:       MSP,
+			Groups:    []Group{},
+		}
+
+		assetJSONasBytes, err := json.Marshal(NewGroup)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
+		}
+
+		err = ctx.GetStub().PutPrivateData(PDC, assetInput.GID, assetJSONasBytes)
+		if err != nil {
+			return fmt.Errorf("failed to Update Project into private data collection: %v", err)
+		}
+
+		return nil
+
 	}
 
-	// Get ID of submitting client identity
-	clientID, err := submittingClientIdentity(ctx)
-	if err != nil {
-		return err
-	}
+	// Group doesn't exist at this point. Then, we get the Project Object
 
-	// Verify that the client is submitting request to peer in their organization
-	// This is to ensure that a client from another org doesn't attempt to read or
-	// write private data from this peer.
-	err = verifyClientOrgMatchesPeerOrg(ctx)
-	if err != nil {
-		return fmt.Errorf("CreateGroup cannot be performed: Error %v", err)
-	}
-
-	// We get the Project Object
-
-	PID := MSP + "." + assetInput.ProjectName
-	ProjectAsBytes, err := ctx.GetStub().GetPrivateData(PDC, PID)
-
-	if err != nil {
-		return fmt.Errorf("error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified ", ProjectAsBytes, err)
-	}
-
-	if ProjectAsBytes == nil {
-		return fmt.Errorf("error Getting the Project %v from the Implicit PDC: Error %v. Group can't be created if no Project is specified: ", ProjectAsBytes, err)
-	}
+	PID := MSP + "." + assetInput.ProjectName + "." + assetInput.ProjectName
 
 	NewGroup := Group{
 		GID:       assetInput.GID,
 		GroupName: assetInput.GroupName,
-		Project:   PID,
+		Project:   MSP + "." + assetInput.ProjectName,
 		Users:     []User{},
 		Org:       MSP,
+		Groups:    []Group{},
 	}
 
 	assetJSONasBytes, err := json.Marshal(NewGroup)
 	if err != nil {
-		return fmt.Errorf("failed to marshal Schema into JSON: %v", err)
+		return fmt.Errorf("failed to marshal NewGroup into JSON: %v", err)
 	}
 
 	var project Group
 
+	ProjectAsBytes, err := ctx.GetStub().GetPrivateData(PDC, PID)
+
+	if err != nil {
+		return fmt.Errorf("failed to Obtain project: %v", err)
+	}
 	err = json.Unmarshal(ProjectAsBytes, &project)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal JSON: %v", err)
+		return fmt.Errorf("failed to unmarshal JSON. Can't Marshal the Project: %v", err)
 	}
 
 	project.Groups = append(project.Groups, NewGroup)
@@ -827,11 +839,11 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 		return fmt.Errorf("failed to marshal Project into JSON: %v", err)
 	}
 
+	// We update the Project with the new Group
 	err = ctx.GetStub().PutPrivateData(PDC, PID, assetJSONasBytes)
 	if err != nil {
 		return fmt.Errorf("failed to Update Project into private data collection: %v", err)
 	}
-
 	// Save asset to private data collection
 	// Typical logger, logs to stdout/file in the fabric managed docker container, running this chaincode
 	// Look for container name like dev-peer0.org1.example.com-{chaincodename_version}-xyz

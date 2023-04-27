@@ -242,7 +242,6 @@ fabric-ca-client register --caname ca-org2 --id.name buyer --id.secret buyerpw -
 fabric-ca-client enroll -u https://buyer:buyerpw@localhost:8054 --caname ca-org2 -M "${PWD}/organizations/peerOrganizations/org2.example.com/users/buyer@org2.example.com/msp" --tls.certfiles "${PWD}/organizations/fabric-ca/org2/tls-cert.pem"
 cp "${PWD}/organizations/peerOrganizations/org2.example.com/msp/config.yaml" "${PWD}/organizations/peerOrganizations/org2.example.com/users/buyer@org2.example.com/msp/config.yaml"
 
-
 echo "========= TESTING OF Init() in IPDC ==========="
 
 export PATH=${PWD}/../bin:$PATH
@@ -267,7 +266,7 @@ echo "========= TESTING OF GiveProject - GiveGroup - GiveUser IMPLEMENTATION in 
 #APIUserId = benitoPinedaGonzales@gmail.com
 
 
-peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveProject","Args":["Org1MSP.OSC-IS_PROJECT"]}'
+peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveGroup","Args":["Org1MSP.OSC-IS_PROJECT"]}'
 
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"GiveGroup","Args":["Org1MSP.OSC-IS_PROJECT.Admin"]}'
@@ -278,7 +277,7 @@ peer chaincode query -C mychannel -n private -c  '{"function":"GetAllPDCUsers","
 
 echo "========= CC Invoke: Adding User to Group ==========="
 
-export ADD_USER_TO_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.Admins\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
+export ADD_USER_TO_GROUP=$(echo -n "{\"GID\": \"Org1MSP.OSC-IS_PROJECT.Users\", \"APIUserID\": \"john@email.com\"}" | base64 | tr -d \\n)
 
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"AddUserToGroup","Args":[]}' --transient "{\"asset_properties\":\"$ADD_USER_TO_GROUP\"}"
@@ -360,7 +359,7 @@ peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.exa
 echo "========= TESTING OF NewGroup IMPLEMENTATION in IPDC ==========="
 
 
-export GROUP_PROPERTIES=$(echo -n "{\"GroupName\":\"Admin\",\"ProjectName\":\"OSC-IS_PROJECT\"}" | base64 | tr -d \\n)
+export GROUP_PROPERTIES=$(echo -n "{\"GroupName\":\"\",\"ProjectName\":\"OSC-IS_PROJECT\"}" | base64 | tr -d \\n)
 
 peer chaincode invoke -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com --tls --cafile "${PWD}/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" -C mychannel -n private -c '{"function":"NewGroup","Args":[]}' --transient "{\"asset_properties\":\"$GROUP_PROPERTIES\"}"
 

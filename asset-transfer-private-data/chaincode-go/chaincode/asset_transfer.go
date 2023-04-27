@@ -584,6 +584,13 @@ func (s *SmartContract) GetUser(ctx contractapi.TransactionContextInterface, API
 
 func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) error {
 
+	hasPriviledge, err := s.VerifyUserHasPriviledge(ctx)
+	if err != nil {
+		return fmt.Errorf("error verifying user's Identity: %v", err)
+	}
+	if !hasPriviledge {
+		return fmt.Errorf("User doesn't have enough Privileges to create a new User")
+	}
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting transient: %v", err)
@@ -610,16 +617,16 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 	PDC := "_implicit_org_" + MSP
 	assetInput.Org = MSP
 
-	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
-	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
+	//AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
+	//isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
-	if err != nil {
-		return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
-	}
+	//if err != nil {
+	//	return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
+	//}
 
-	if !isAdmin {
-		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create user %v. Error %v", assetInput.ProjectName, assetInput.APIUserId, err)
-	}
+	//if !isAdmin {
+	//	return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create //user %v. Error %v", assetInput.ProjectName, assetInput.APIUserId, err)
+	//}
 
 	//Has User been created?
 
@@ -710,6 +717,14 @@ func (s *SmartContract) NewUser(ctx contractapi.TransactionContextInterface) err
 
 func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) error {
 
+	hasPriviledge, err := s.VerifyUserHasPriviledge(ctx)
+	if err != nil {
+		return fmt.Errorf("error verifying user's Identity: %v", err)
+	}
+	if !hasPriviledge {
+		return fmt.Errorf("User doesn't have enough Privileges to create a new User")
+	}
+
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting transient: %v", err)
@@ -738,16 +753,16 @@ func (s *SmartContract) NewGroup(ctx contractapi.TransactionContextInterface) er
 	assetInput.Org = MSP
 	assetInput.GID = MSP + "." + assetInput.ProjectName + "." + assetInput.GroupName
 
-	AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
-	isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
+	//AdminGID := assetInput.Org + "." + assetInput.ProjectName + ".Admin"
+	//isAdmin, err := s.VerifyUserIsAdmin(ctx, AdminGID)
 
-	if err != nil {
-		return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
-	}
+	//if err != nil {
+	//	return fmt.Errorf("verification of Submitting Identity cannot be performed: Error %v", err)
+	//}
 
-	if !isAdmin {
-		return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
-	}
+	//if !isAdmin {
+	//	return fmt.Errorf("submitting Identity is not admin of respective Project %v. Can't create //Group %v. Error %v", assetInput.ProjectName, assetInput.GID, err)
+	//}
 
 	assetAsBytes, err := ctx.GetStub().GetPrivateData(PDC, assetInput.GID)
 
@@ -1193,6 +1208,13 @@ func (s *SmartContract) VerifyUserIsAdmin(ctx contractapi.TransactionContextInte
 // Pass GID and APIUserID as argument in transient dictionary
 func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterface) error {
 
+	hasPriviledge, err := s.VerifyUserHasPriviledge(ctx)
+	if err != nil {
+		return fmt.Errorf("error verifying user's Identity: %v", err)
+	}
+	if !hasPriviledge {
+		return fmt.Errorf("User doesn't have enough Privileges to create a new User")
+	}
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting transient: %v", err)
@@ -1220,18 +1242,18 @@ func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterfa
 		return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
 	}
 
-	GroupSplit := strings.Split(GID, ".")
-	GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
+	//GroupSplit := strings.Split(GID, ".")
+	//GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
 
-	isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
+	//isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
 
-	if err != nil {
-		return fmt.Errorf("Verification of Identity cannot be performed. Can't verify if submitting user is admin or not: Error %v", err)
-	}
+	//if err != nil {
+	//	return fmt.Errorf("Verification of Identity cannot be performed. Can't verify if submitting user is admin or not: Error %v", err)
+	//}
 
-	if !isAdmin {
-		return fmt.Errorf("Submitting Identity is not admin. Can't add user to Group: Error %v", err)
-	}
+	//if !isAdmin {
+	//	return fmt.Errorf("Submitting Identity is not admin. Can't add user to Group: Error %v", err)
+	//}
 
 	User_, err := s.GetUser(ctx, assetInput.APIUserID)
 
@@ -1309,6 +1331,14 @@ func (s *SmartContract) AddUserToGroup(ctx contractapi.TransactionContextInterfa
 // Pass GID and APIUserID as argument in transient dictionary
 func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextInterface) error {
 
+	hasPriviledge, err := s.VerifyUserHasPriviledge(ctx)
+	if err != nil {
+		return fmt.Errorf("error verifying user's Identity: %v", err)
+	}
+	if !hasPriviledge {
+		return fmt.Errorf("User doesn't have enough Privileges to create a new User")
+	}
+
 	transientAssetJSON, err := s.getTransientMap(ctx)
 	if err != nil {
 		return fmt.Errorf("error getting transient: %v", err)
@@ -1336,17 +1366,17 @@ func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextIn
 		return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
 	}
 
-	GroupSplit := strings.Split(GID, ".")
-	GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
-	isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
+	//GroupSplit := strings.Split(GID, ".")
+	//GIDAdmin := GroupSplit[0] + "." + GroupSplit[1] + ".Admin"
+	//isAdmin, err := s.VerifyUserIsAdmin(ctx, GIDAdmin)
 
-	if err != nil {
-		return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
-	}
+	//if err != nil {
+	//	return fmt.Errorf("Verification of Identity cannot be performed: Error %v", err)
+	//}
 
-	if !isAdmin {
-		return fmt.Errorf("Submitting Identity is not admin. Can't remove user from Group: Error %v", err)
-	}
+	//if !isAdmin {
+	//	return fmt.Errorf("Submitting Identity is not admin. Can't remove user from Group: Error %v", err)
+	//}
 
 	User, err := s.GetUser(ctx, assetInput.APIUserID)
 
@@ -1439,19 +1469,32 @@ func (s *SmartContract) RemoveUserFromGroup(ctx contractapi.TransactionContextIn
 	return nil
 }
 
-func GetCertificate(ctx contractapi.TransactionContextInterface) (string, error) {
-	cert, err := ctx.GetClientIdentity().GetX509Certificate()
-	var UID string
-	OU := "OU"
+func (s *SmartContract) VerifyUserHasPriviledge(ctx contractapi.TransactionContextInterface) (bool, error) {
+	clientID, err := submittingClientIdentity(ctx)
 	if err != nil {
-		return "", fmt.Errorf("Failed to read client X509Certificate: %v", err)
+		return false, fmt.Errorf("failed to read User's Priviledge: %v", err)
 	}
-	for _, n := range cert.Subject.Names {
-		if n.Type.Equal(OU) {
-			if v, ok := n.Value.(string); ok {
-				UID = v
+
+	hasOU := strings.Contains(clientID, "OU=")
+	if hasOU {
+		res := strings.Split(clientID, ",")
+		for _, s := range res {
+			if strings.Contains(s, "OU=") {
+				OU := strings.Split(s, "=")[1]
+				if OU == "client" {
+					return true, nil
+				}
 			}
 		}
 	}
+	return false, nil
+}
 
+func (s *SmartContract) GetUserID(ctx contractapi.TransactionContextInterface) (string, error) {
+	clientID, err := submittingClientIdentity(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to read User's IDENTITY: %v", err)
+	}
+
+	return clientID, nil
 }
